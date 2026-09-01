@@ -29,3 +29,6 @@ data/processed/
 
 # Logs
 *.log
+
+# OSM / application cache
+cache/
