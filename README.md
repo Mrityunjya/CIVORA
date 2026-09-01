@@ -8,7 +8,7 @@ CIVORA is an experimental UrbanTech decision-support system designed to understa
 
 Instead of simply displaying an incident on a map, CIVORA aims to answer a more important question:
 
-**What happens next, and what should we do about it?**
+**What happens next, and what should we do about it ?**
 
 ---
 
