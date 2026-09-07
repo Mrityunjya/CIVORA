@@ -4,7 +4,6 @@ import osmnx as ox
 from backend.services.graph_builder import prepare_graph
 from backend.services.routing import route_from_coordinates
 from backend.services.incident_engine import apply_incident
-from backend.models.incident import Incident
 
 
 GRAPH_PATH = "data/raw/osm/adyar_drive.graphml"
@@ -56,27 +55,39 @@ print(
 
 
 # --------------------------------------------------
-# CREATE INCIDENT
+# CREATE GEOGRAPHIC INCIDENT
 # --------------------------------------------------
 
 incident_node = normal_result["route"][
     len(normal_result["route"]) // 2
 ]
 
-
-incident = Incident(
-    incident_id="INC-001",
-    incident_type="accident",
-    node=incident_node,
-    severity="high",
+incident_lat = float(
+    graph.nodes[incident_node]["y"]
 )
+
+incident_lon = float(
+    graph.nodes[incident_node]["x"]
+)
+
+incident_radius = 100
 
 
 print("\n=== INCIDENT ===")
 
-print(f"Type: {incident.incident_type}")
-print(f"Severity: {incident.severity}")
-print(f"Node: {incident.node}")
+print("Type: accident")
+print("Severity: high")
+
+print(
+    f"Location: "
+    f"{incident_lat:.6f}, "
+    f"{incident_lon:.6f}"
+)
+
+print(
+    f"Impact radius: "
+    f"{incident_radius} m"
+)
 
 
 # --------------------------------------------------
@@ -85,9 +96,10 @@ print(f"Node: {incident.node}")
 
 modified_graph, affected_edges = apply_incident(
     graph,
-    incident,
+    incident_lat,
+    incident_lon,
+    radius_m=incident_radius,
 )
-
 
 print(
     f"Affected road segments: "
@@ -121,8 +133,9 @@ try:
         f"{rerouted_result['travel_time_s']:.2f} s"
     )
 
+
     # --------------------------------------------------
-    # IMPACT
+    # IMPACT ANALYSIS
     # --------------------------------------------------
 
     distance_change = (
@@ -134,6 +147,7 @@ try:
         rerouted_result["travel_time_s"]
         - normal_result["travel_time_s"]
     )
+
 
     print("\n=== INCIDENT IMPACT ===")
 
@@ -147,6 +161,22 @@ try:
         f"{time_change:.2f} s"
     )
 
+
+    if normal_result["travel_time_s"] > 0:
+
+        delay_percentage = (
+            time_change
+            / normal_result["travel_time_s"]
+        ) * 100
+
+        print(
+            f"Travel time increase: "
+            f"{delay_percentage:.2f}%"
+        )
+
+
 except nx.NetworkXNoPath:
 
-    print("\nNo alternative route available.")
+    print(
+        "\nNo alternative route available."
+    )
