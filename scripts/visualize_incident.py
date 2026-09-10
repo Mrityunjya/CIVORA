@@ -5,6 +5,12 @@ import folium
 from backend.services.graph_builder import prepare_graph
 from backend.services.routing import route_from_coordinates
 from backend.services.incident_engine import apply_incident
+from backend.services.facility_engine import (
+    rank_facilities,
+    recommend_facility,
+)
+
+from data.sample.facilities import FACILITIES
 
 
 GRAPH_PATH = "data/raw/osm/adyar_drive.graphml"
@@ -20,7 +26,7 @@ graph = prepare_graph(graph)
 
 
 # --------------------------------------------------
-# COORDINATES
+# ORIGIN AND DESTINATION
 # --------------------------------------------------
 
 origin_lat = 13.0067
@@ -61,7 +67,6 @@ incident_lon = float(
     graph.nodes[incident_node]["x"]
 )
 
-# Visual impact zone only.
 incident_radius = 50
 
 
@@ -105,6 +110,53 @@ except (
     rerouted_result = None
     rerouted_route = []
     reroute_available = False
+
+
+# --------------------------------------------------
+# EMERGENCY FACILITY RANKING
+# --------------------------------------------------
+
+ranked_facilities = rank_facilities(
+    graph,
+    incident_lat,
+    incident_lon,
+    FACILITIES,
+)
+
+recommended_facility = recommend_facility(
+    graph,
+    incident_lat,
+    incident_lon,
+    FACILITIES,
+)
+
+
+# --------------------------------------------------
+# RESPONSE ROUTE
+# --------------------------------------------------
+
+response_route = []
+
+if recommended_facility:
+
+    try:
+
+        response_result = route_from_coordinates(
+            graph,
+            recommended_facility["latitude"],
+            recommended_facility["longitude"],
+            incident_lat,
+            incident_lon,
+        )
+
+        response_route = response_result["route"]
+
+    except (
+        nx.NetworkXNoPath,
+        nx.NodeNotFound,
+    ):
+
+        response_route = []
 
 
 # --------------------------------------------------
@@ -155,10 +207,10 @@ folium.Marker(
 folium.Marker(
     [incident_lat, incident_lon],
     popup=(
-        "CIVORA INCIDENT<br>"
+        "<b>CIVORA INCIDENT</b><br>"
         "Type: Accident<br>"
         "Severity: High<br>"
-        "Affected road segment"
+        "Road segment closed"
     ),
     icon=folium.Icon(
         color="orange",
@@ -215,9 +267,9 @@ for u, v, key in affected_edges:
             [u_lat, u_lon],
             [v_lat, v_lon],
         ],
-        weight=7,
+        weight=8,
         opacity=0.9,
-        popup="Closed road segment",
+        popup="Closed incident road",
     ).add_to(m)
 
 
@@ -270,6 +322,71 @@ if reroute_available:
 
 
 # --------------------------------------------------
+# EMERGENCY FACILITIES
+# --------------------------------------------------
+
+for facility in ranked_facilities:
+
+    is_recommended = (
+        recommended_facility is not None
+        and facility["facility_id"]
+        == recommended_facility["facility_id"]
+    )
+
+    popup_text = (
+        f"<b>{facility['name']}</b><br>"
+        f"Type: {facility['facility_type']}<br>"
+        f"Response time: "
+        f"{facility['travel_time_s']:.1f} seconds<br>"
+        f"Distance: "
+        f"{facility['distance_m']:.1f} m"
+    )
+
+    if is_recommended:
+
+        popup_text += (
+            "<br><b>★ RECOMMENDED RESPONSE FACILITY</b>"
+        )
+
+    folium.Marker(
+        [
+            facility["latitude"],
+            facility["longitude"],
+        ],
+        popup=popup_text,
+        icon=folium.Icon(
+            color="blue"
+            if not is_recommended
+            else "green",
+            icon="plus-sign",
+        ),
+    ).add_to(m)
+
+
+# --------------------------------------------------
+# RESPONSE ROUTE
+# --------------------------------------------------
+
+if response_route:
+
+    response_coordinates = [
+        [
+            float(graph.nodes[node]["y"]),
+            float(graph.nodes[node]["x"]),
+        ]
+        for node in response_route
+        if node in graph.nodes
+    ]
+
+    folium.PolyLine(
+        response_coordinates,
+        weight=7,
+        opacity=0.95,
+        popup="Emergency response route",
+    ).add_to(m)
+
+
+# --------------------------------------------------
 # SAVE MAP
 # --------------------------------------------------
 
@@ -301,6 +418,7 @@ print(
     f"{incident_edge}"
 )
 
+
 if reroute_available:
 
     print(
@@ -321,11 +439,48 @@ if reroute_available:
 else:
 
     print(
-        "Rerouted distance: N/A"
+        "Alternative route: NOT AVAILABLE"
+    )
+
+
+# --------------------------------------------------
+# FACILITY RESULTS
+# --------------------------------------------------
+
+print("\n=== EMERGENCY FACILITY RANKING ===")
+
+for index, facility in enumerate(
+    ranked_facilities,
+    start=1,
+):
+
+    print(
+        f"{index}. "
+        f"{facility['name']} | "
+        f"{facility['travel_time_s']:.2f} s"
+    )
+
+
+if recommended_facility:
+
+    print(
+        "\n=== CIVORA RESPONSE RECOMMENDATION ==="
     )
 
     print(
-        "Alternative route: NOT AVAILABLE"
+        f"Recommended facility: "
+        f"{recommended_facility['name']}"
+    )
+
+    print(
+        f"Estimated response time: "
+        f"{recommended_facility['travel_time_s']:.2f} s"
+    )
+
+else:
+
+    print(
+        "\nNo reachable emergency facility."
     )
 
 
