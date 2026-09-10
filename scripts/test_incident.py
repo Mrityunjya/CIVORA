@@ -10,16 +10,15 @@ GRAPH_PATH = "data/raw/osm/adyar_drive.graphml"
 
 
 # --------------------------------------------------
-# Load graph
+# LOAD GRAPH
 # --------------------------------------------------
 
 graph = ox.load_graphml(GRAPH_PATH)
-
 graph = prepare_graph(graph)
 
 
 # --------------------------------------------------
-# Define origin and destination
+# ORIGIN AND DESTINATION
 # --------------------------------------------------
 
 origin_lat = 13.0067
@@ -70,8 +69,6 @@ incident_lon = float(
     graph.nodes[incident_node]["x"]
 )
 
-incident_radius = 100
-
 
 print("\n=== INCIDENT ===")
 
@@ -84,21 +81,20 @@ print(
     f"{incident_lon:.6f}"
 )
 
-print(
-    f"Impact radius: "
-    f"{incident_radius} m"
-)
-
 
 # --------------------------------------------------
 # APPLY INCIDENT
 # --------------------------------------------------
 
-modified_graph, affected_edges = apply_incident(
+modified_graph, affected_edges, incident_edge = apply_incident(
     graph,
     incident_lat,
     incident_lon,
-    radius_m=incident_radius,
+)
+
+print(
+    f"Incident road segment: "
+    f"{incident_edge}"
 )
 
 print(
@@ -177,6 +173,13 @@ try:
 
 except nx.NetworkXNoPath:
 
+    print("\n=== INCIDENT IMPACT ===")
+
     print(
-        "\nNo alternative route available."
+        "Alternative route: NOT AVAILABLE"
+    )
+
+    print(
+        "The incident disconnected "
+        "the selected origin and destination."
     )
